@@ -2,7 +2,7 @@ from aiogram import types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.dispatcher import FSMContext
 from datetime import datetime
-
+from keyboards.default.get_excel import get_excel
 from loader import dp
 from states.personalData import PersonalData
 from save_to_excel import save_user_data
@@ -53,7 +53,7 @@ async def answer_phone(message: types.Message, state: FSMContext):
 
   
     for admin_id in ADMINS:
-        await dp.bot.send_message(chat_id=admin_id, text="📥 Yangi murojaat kelib tushdi.")
+        await dp.bot.send_message(chat_id=admin_id, text="📥 Yangi murojaat kelib tushdi.",reply_markup=get_excel)
 
 
     msg = (
@@ -66,7 +66,6 @@ async def answer_phone(message: types.Message, state: FSMContext):
     await message.answer(msg)
 
     await message.answer("📝 <i>Agar sizda qo‘shimcha savollar bo‘lsa, bu yerga yozib qoldiring.</i>", parse_mode='HTML')
-
     await PersonalData.confirm.set()
 
 
