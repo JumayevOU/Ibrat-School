@@ -1,91 +1,66 @@
 from aiogram import types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.dispatcher.filters import Command, CommandStart
 from aiogram.dispatcher import FSMContext
-from datetime import datetime
-from keyboards.default.get_excel import get_excel
 from loader import dp
+from data.config import ADMINS
+from datetime import datetime
+import os
+from keyboards.default.get_excel import get_excel
 from states.personalData import PersonalData
-from save_to_excel import save_user_data
-from data.config import GROUP_ID, ADMINS
 
 
-@dp.message_handler(state=PersonalData.fullname)
-async def answer_fullname(message: types.Message, state: FSMContext):
-    fullname = message.text
-    await state.update_data({'fullname': fullname})
+@dp.message_handler(CommandStart(), state="*")
+async def start_handler(message: types.Message, state: FSMContext):
+    await state.finish()
 
-    contact_keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    contact_keyboard.add(KeyboardButton("📱 Telefon raqamni ulashish", request_contact=True))
-    await message.answer("📞 Telefon raqamingizni ulashing yoki qo'lda kiriting:", reply_markup=contact_keyboard)
-
-    await PersonalData.phoneNumber.set()
-
-
-@dp.message_handler(state=PersonalData.phoneNumber, content_types=[types.ContentType.CONTACT, types.ContentType.TEXT])
-async def answer_phone(message: types.Message, state: FSMContext):
-    if message.contact:
-        raw = message.contact.phone_number.strip()
-    elif message.text:
-        raw = message.text.strip()
+    if str(message.from_user.id) in ADMINS:
+        await message.answer("📊 Excel hisobot bo‘limi", reply_markup=get_excel)
     else:
-        await message.answer("❗️ Telefon raqami noto‘g‘ri. Qaytadan kiriting.")
+        await message.answer(
+            f"Assalomu alaykum hurmatli {message.from_user.full_name}! Ismim Elyor\n\n"
+            "<b>Ibrat School</b> menejeri bo‘laman.\n\n"
+            "Sizga yordam berishim uchun ismingizni yozib yuboring."
+        )
+        await PersonalData.fullname.set()
+
+
+@dp.message_handler(text="📄 Bugungi Excel Fayl", state="*")
+async def send_today_excel(message: types.Message):
+    if str(message.from_user.id) not in ADMINS:
+        await message.answer("⛔ Sizda bu buyruqdan foydalanish huquqi yo‘q.")
         return
 
-    phone = None
-    if raw.startswith("+998") and len(raw) == 13 and raw[1:].isdigit():
-        phone = raw
-    elif raw.startswith("998") and len(raw) == 12 and raw.isdigit():
-        phone = f"+{raw}"
-    elif raw.startswith("9") and len(raw) == 9 and raw.isdigit():
-        phone = f"+998{raw}"
-    else:
-        await message.answer("❗️ Telefon raqam noto‘g‘ri formatda. Masalan: +998901234567")
+    today_str = datetime.today().strftime("%Y.%m.%d")
+    file_path = f"xisobot/{today_str}.xlsx"
+
+    if not os.path.exists(file_path):
+        await message.answer("📂 Bugungi kun uchun fayl topilmadi.")
         return
 
-    await state.update_data({'phone': phone})
-    await message.answer("✅ Telefon raqamingiz saqlandi. Rahmat!", reply_markup=ReplyKeyboardRemove())
-
-    data = await state.get_data()
-    fullname = data.get('fullname')
-
- 
-    save_user_data(fullname, phone)
-
-  
-    for admin_id in ADMINS:
-        await dp.bot.send_message(chat_id=admin_id, text="📥 Yangi murojaat kelib tushdi.",reply_markup=get_excel)
+    await message.answer_document(types.InputFile(file_path), caption=f"📄 {today_str} kuni uchun hisobot.")
 
 
-    msg = (
-        f"<b>Sizning ismingiz:</b>\n{fullname}\n"
-        f"<b>Sizga bog‘lanishimiz uchun telefon raqamingiz:</b> {phone}\n\n"
-        "✅ <b>Ma'lumotlaringiz muvaffaqiyatli qabul qilindi.</b>\n"
-        "📞 <b>Sizga tez orada ma'sul xodimlarimiz aloqaga chiqishadi.</b>\n\n"
-        "Bizga ishonch bildirganingiz uchun tashakkur! 😊"
-    )
-    await message.answer(msg)
+@dp.message_handler(text="📂 Barcha Excel Fayllar", state="*")
+async def send_all_excels(message: types.Message):
+    if str(message.from_user.id) not in ADMINS:
+        await message.answer("⛔ Sizda bu buyruqdan foydalanish huquqi yo‘q.")
+        return
 
-    await message.answer("📝 <i>Agar sizda qo‘shimcha savollar bo‘lsa, bu yerga yozib qoldiring.</i>", parse_mode='HTML')
-    await PersonalData.confirm.set()
+    folder = "xisobot"
+    if not os.path.exists(folder):
+        await message.answer("📂 'xisobot' papkasi topilmadi.")
+        return
+
+    files = os.listdir(folder)
+    excel_files = sorted(
+    [f for f in files if f.endswith(".xlsx")],
+    reverse=False  )
 
 
-@dp.message_handler(lambda msg: not msg.text.startswith('/'), state=PersonalData.confirm)
-async def handle_additional_questions(message: types.Message, state: FSMContext):
-    question = message.text
-    data = await state.get_data()
-    fullname = data.get('fullname')
-    phone = data.get('phone')
+    if not excel_files:
+        await message.answer("📂 Hech qanday fayl topilmadi.")
+        return
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    admin_msg = (
-        f"#{date_str}\n"
-        f"📩 <b>Qo‘shimcha savol:</b>\n"
-        f"👤 <b>Ism:</b> {fullname}\n"
-        f"📞 <b>Telefon:</b> {phone}\n"
-        f"💬 <b>Xabar:</b> {question}"
-    )
-    await dp.bot.send_message(chat_id=GROUP_ID, text=admin_msg, parse_mode='HTML')
-
-    await message.answer("✅ Xabaringiz qabul qilindi. Mas’ul xodimlar tez orada siz bilan bog‘lanishadi.")
-
-    await PersonalData.confirm.set()
+    for f in excel_files:
+        path = os.path.join(folder, f)
+        await message.answer_document(types.InputFile(path), caption=f"📄 Fayl: {f}")
