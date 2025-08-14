@@ -6,8 +6,7 @@ from datetime import datetime
 from loader import dp
 from states.personalData import PersonalData
 from save_to_excel import save_user_data
-from data.config import GROUP_ID  
-
+from data.config import GROUP_ID, ADMINS
 
 
 @dp.message_handler(state=PersonalData.fullname)
@@ -20,7 +19,6 @@ async def answer_fullname(message: types.Message, state: FSMContext):
     await message.answer("📞 Telefon raqamingizni ulashing yoki qo'lda kiriting:", reply_markup=contact_keyboard)
 
     await PersonalData.phoneNumber.set()
-
 
 
 @dp.message_handler(state=PersonalData.phoneNumber, content_types=[types.ContentType.CONTACT, types.ContentType.TEXT])
@@ -49,7 +47,14 @@ async def answer_phone(message: types.Message, state: FSMContext):
 
     data = await state.get_data()
     fullname = data.get('fullname')
+
+ 
     save_user_data(fullname, phone)
+
+  
+    for admin_id in ADMINS:
+        await dp.bot.send_message(chat_id=admin_id, text="📥 Yangi murojaat kelib tushdi.")
+
 
     msg = (
         f"<b>Sizning ismingiz:</b>\n{fullname}\n"
@@ -65,7 +70,6 @@ async def answer_phone(message: types.Message, state: FSMContext):
     await PersonalData.confirm.set()
 
 
-
 @dp.message_handler(lambda msg: not msg.text.startswith('/'), state=PersonalData.confirm)
 async def handle_additional_questions(message: types.Message, state: FSMContext):
     question = message.text
@@ -75,7 +79,7 @@ async def handle_additional_questions(message: types.Message, state: FSMContext)
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     admin_msg = (
-        f"# {date_str}\n"
+        f"#{date_str}\n"
         f"📩 <b>Qo‘shimcha savol:</b>\n"
         f"👤 <b>Ism:</b> {fullname}\n"
         f"📞 <b>Telefon:</b> {phone}\n"
