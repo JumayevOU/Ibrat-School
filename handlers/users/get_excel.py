@@ -1,12 +1,30 @@
 from aiogram import types
-from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import Command, CommandStart
+from aiogram.dispatcher import FSMContext
 from loader import dp
 from data.config import ADMINS
 from datetime import datetime
 import os
+from keyboards.default.get_excel import get_excel
+from states.personalData import PersonalData
 
 
-@dp.message_handler(Command("get_excel"), state="*")
+@dp.message_handler(CommandStart(), state="*")
+async def start_handler(message: types.Message, state: FSMContext):
+    await state.finish()
+
+    if str(message.from_user.id) in ADMINS:
+        await message.answer("📊 Excel hisobot bo‘limi", reply_markup=get_excel)
+    else:
+        await message.answer(
+            f"Assalomu alaykum hurmatli {message.from_user.full_name}! Ismim Elyor\n\n"
+            "<b>Ibrat School</b> menejeri bo‘laman.\n\n"
+            "Sizga yordam berishim uchun ismingizni yozib yuboring."
+        )
+        await PersonalData.fullname.set()
+
+
+@dp.message_handler(text="📄 Bugungi Excel Fayl", state="*")
 async def send_today_excel(message: types.Message):
     if str(message.from_user.id) not in ADMINS:
         await message.answer("⛔ Sizda bu buyruqdan foydalanish huquqi yo‘q.")
@@ -22,7 +40,7 @@ async def send_today_excel(message: types.Message):
     await message.answer_document(types.InputFile(file_path), caption=f"📄 {today_str} kuni uchun hisobot.")
 
 
-@dp.message_handler(Command("get_all_excels"), state="*")
+@dp.message_handler(text="📂 Barcha Excel Fayllar", state="*")
 async def send_all_excels(message: types.Message):
     if str(message.from_user.id) not in ADMINS:
         await message.answer("⛔ Sizda bu buyruqdan foydalanish huquqi yo‘q.")
@@ -34,7 +52,10 @@ async def send_all_excels(message: types.Message):
         return
 
     files = os.listdir(folder)
-    excel_files = [f for f in files if f.endswith(".xlsx")]
+    excel_files = sorted(
+    [f for f in files if f.endswith(".xlsx")],
+    reverse=False  )
+
 
     if not excel_files:
         await message.answer("📂 Hech qanday fayl topilmadi.")
